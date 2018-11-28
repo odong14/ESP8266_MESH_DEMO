@@ -83,7 +83,7 @@ void ICACHE_FLASH_ATTR mesh_topo_test()
         if (!espconn_mesh_get_node_info(MESH_NODE_ALL, &sub_dev_mac, &sub_dev_count))
             return;
         // the first one is mac address of router
-        //mesh_disp_sub_dev_mac(sub_dev_mac, sub_dev_count);
+        mesh_disp_sub_dev_mac(sub_dev_mac, sub_dev_count);
         mesh_device_set_root((struct mesh_device_mac_type *)src);
 
         if (sub_dev_count > 1) {
@@ -146,5 +146,5 @@ void ICACHE_FLASH_ATTR mesh_topo_test_init()
     static os_timer_t topo_timer;
     os_timer_disarm(&topo_timer);
     os_timer_setfn(&topo_timer, (os_timer_func_t *)mesh_topo_test, NULL);
-    os_timer_arm(&topo_timer, 14000, true);
+    os_timer_arm(&topo_timer, 10000, true);
 }

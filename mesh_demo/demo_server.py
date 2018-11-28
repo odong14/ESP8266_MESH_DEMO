@@ -1,7 +1,6 @@
-#!/usr/bin/env python
-
 import sys
 import struct
+import binascii
 if sys.version_info[0] < 3:
     import SocketServer as socketserver
 else:
@@ -21,11 +20,17 @@ class MeshHandler(socketserver.BaseRequestHandler):
                 req.extend(header)
                 req.extend(body)
                 resp = bytearray()
-                resp.extend(req[0:4])
-                resp.extend(req[10:16])
-                resp.extend(req[4:10])
-                resp.extend(req[16:])
+                resp.extend(req[0:4]) # header
+		print "header", binascii.hexlify(resp[0:4])
+                resp.extend(req[10:16]) #source
+		print "source", binascii.hexlify(resp[10:16])
+                resp.extend(req[4:10]) #target
+		print "target", binascii.hexlify(resp[4:10])
+                resp.extend(req[16:]) #data
+		print "data", binascii.hexlify(resp[16:])
                 self.request.sendall(resp)
+				 
+ 
         except Exception as e:
             print(e)
 

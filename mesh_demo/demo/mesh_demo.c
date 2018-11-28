@@ -176,9 +176,9 @@ void ICACHE_FLASH_ATTR mesh_enable_cb(int8_t res)
 TEST_SCENARIO:
     mesh_device_list_init();
     mesh_topo_test_init();
-    mesh_json_mcast_test_init();
-    mesh_json_bcast_test_init();
-    mesh_json_p2p_test_init();
+    // mesh_json_mcast_test_init();
+    // mesh_json_bcast_test_init();
+    // mesh_json_p2p_test_init();
 }
 
 void ICACHE_FLASH_ATTR esp_mesh_demo_test()
@@ -330,13 +330,13 @@ static bool ICACHE_FLASH_ATTR router_init()
 {
     struct station_config config;
 
-    if (!espconn_mesh_is_root_candidate())
-        goto INIT_SMARTCONFIG;
+    //if (!espconn_mesh_is_root_candidate())
+        //goto INIT_SMARTCONFIG;
 
     MESH_DEMO_MEMSET(&config, 0, sizeof(config));
-    espconn_mesh_get_router(&config);
-    if (config.ssid[0] == 0xff ||
-        config.ssid[0] == 0x00) {
+    //espconn_mesh_get_router(&config);
+    //if (config.ssid[0] == 0xff ||
+     //   config.ssid[0] == 0x00) {
         /*
          * please change MESH_ROUTER_SSID and MESH_ROUTER_PASSWD according to your router
          */
@@ -350,9 +350,9 @@ static bool ICACHE_FLASH_ATTR router_init()
          * if you use normal router, please pay no attention to the bssid,
          * and you don't need to modify the bssid, mesh will ignore the bssid.
          */
-        config.bssid_set = 1;
-        MESH_DEMO_MEMCPY(config.bssid, MESH_ROUTER_BSSID, sizeof(config.bssid));
-    }
+       // config.bssid_set = 1;
+        //MESH_DEMO_MEMCPY(config.bssid, MESH_ROUTER_BSSID, sizeof(config.bssid));
+    //}
 
     /*
      * use espconn_mesh_set_router to set router for mesh node

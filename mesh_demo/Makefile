@@ -11,6 +11,8 @@
 #     subdir/lib to be extracted and rolled up into
 #     a generated lib/image xxx.a ()
 #
+ 
+
 TARGET = eagle
 #FLAVOR = release
 FLAVOR = debug
@@ -76,6 +78,7 @@ LINKFLAGS_eagle.app.v6 = \
 	-lmain	\
 	-lwps \
 	-lmesh \
+	-lpwm \
 	-lsmartconfig \
 	$(DEP_LIBS_eagle.app.v6)					\
 	-Wl,--end-group
