@@ -1,58 +1,26 @@
-import sys
-import struct
-import binascii
-if sys.version_info[0] < 3:
-    import SocketServer as socketserver
-else:
-    import socketserver
+#!/usr/bin/env python
 
-class MeshHandler(socketserver.BaseRequestHandler):
+import sys, traceback, json
+from gevent.server import StreamServer
 
-    def handle(self):
-        self.buf = bytearray()
-        print(self)
-        try:
-            while True:
-                header = self.read_full(4)
-                l, = struct.unpack_from('<H', header[2:4])
-                body = self.read_full(l-4)
-                req = bytearray()
-                req.extend(header)
-                req.extend(body)
-                resp = bytearray()
-                resp.extend(req[0:4]) # header
-		print "header", binascii.hexlify(resp[0:4])
-                resp.extend(req[10:16]) #source
-		print "source", binascii.hexlify(resp[10:16])
-                resp.extend(req[4:10]) #target
-		print "target", binascii.hexlify(resp[4:10])
-                resp.extend(req[16:]) #data
-		print "data", binascii.hexlify(resp[16:])
-                self.request.sendall(resp)
-				 
- 
-        except Exception as e:
-            print(e)
+print "server start, adli ganteng"
 
-    def read_full(self, n):
-        while len(self.buf) < n:
-            try:
-                req = self.request.recv(1024)
-                if not req:
-                    raise(Exception('recv error'))
-                self.buf.extend(req)
-            except Exception as e:
-                raise(e)
-        read = self.buf[0:n]
-        self.buf = self.buf[n:]
-        return bytes(read)
+def echo(socket, address):
+    try:
+        while True:
+            _buf = socket.recv(4096)
+            if not _buf:
+                return
+	    _buf = _buf[0:4] + _buf[10:16] + _buf[4:10] + _buf[16:]
+            socket.sendall(_buf)
+            print _buf
+    except Exception, e:
+        print traceback.format_exc()
+    finally:
+        socket.close()
 
-class ThreadedTCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
-    pass
 
-if __name__ == "__main__":
-    HOST, PORT = "0.0.0.0", 7000
-    server = ThreadedTCPServer((HOST, PORT), MeshHandler)
-    server.allow_reuse_address = True
-    print('mesh server works')
+if __name__ == '__main__':
+    server = StreamServer(('192.168.43.33', 7000), echo)
     server.serve_forever()
+

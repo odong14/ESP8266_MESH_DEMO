@@ -14,7 +14,4 @@
  /opt/xtensa-lx106-elf/lib/gcc/xtensa-lx106-elf/4.8.2/include/sys/_types.h \
  /opt/xtensa-lx106-elf/lib/gcc/xtensa-lx106-elf/4.8.2/include/sys/lock.h \
  /opt/xtensa-lx106-elf/lib/gcc/xtensa-lx106-elf/4.8.2/include/stddef.h \
- ../include/mesh_parser.h ../include/mesh_http.h ../include/mesh_json.h \
- ../include/mesh_mqtt.h ../include/mesh_none.h ../include/mesh_bin.h \
- ../include/mesh_device.h ../include/esp_touch.h ../include/user_config.h \
- ../include/smartconfig.h
+ ../../include/espconn.h
