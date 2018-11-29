@@ -14,13 +14,25 @@
 #include "c_types.h"
 #include "espconn.h"
 #include "user_config.h"
+#include "gpio.h"
+
+#include "ets_sys.h"
+#include "i2c.h"
+#include "bh1750.h"
+//#include "driver/uart.h"
+#include "os_type.h"
+#include "user_interface.h"
+#include "user_config.h"
+
+#include "dht22.h" 
+#include "gpio16.h"
 
 #define MESH_PRINT  ets_printf
 #define MESH_STRLEN ets_strlen
 #define MESH_MEMCPY ets_memcpy
 #define MESH_MEMSET ets_memset
 #define MESH_FREE   os_free
-#define ROOT        1
+#define ROOT        0
 
 static esp_tcp ser_tcp;
 static struct espconn ser_conn;
@@ -29,18 +41,37 @@ void esp_mesh();
 void mesh_enable_cb(int8_t res);
 void esp_mesh_con_cb(void *);
 void esp_recv_entrance(void *, char *, uint16_t);
-void pwm_init();
-void pwm_set(int pwm);
+void pwm_initialize();
+void pwm_set(int value);
 void sensor_init();
 void sensor_cb();
 void mesh_bcast(char buf[]);
 void timer_init();
 void timer_cb();
+void artificial_proccess(char* _Keterangan,char* _Data);
 
 int flag = 0;
 int cnt = 0;
 
-void esp_recv_entrance(void *arg, char *pdata, uint16_t len)
+int setpoint = 500;
+int range = 20;
+int brigthnessincrement = 20;
+int brigthnessdecrement = 20;
+int lastbrigthness = 0;
+int brigthness = 0;
+uint32 io_info[][3] = {{PERIPHS_IO_MUX_GPIO5_U,FUNC_GPIO5,5}};// PWM setup led
+u32 duty[1] = {0};
+int last_value = 0;
+uint8 data[7];
+int value = 0;
+char RecvData[100];
+unsigned int timerPing = 0;
+
+//DHT22
+extern uint8_t pin_num[GPIO_PIN_NUM];
+DHT_Sensor sensor;
+
+void ICACHE_FLASH_ATTR esp_recv_entrance(void *arg, char *pdata, uint16_t len)
 {
     uint8_t *usr_data = NULL;
     uint16_t usr_data_len = 0;
@@ -63,7 +94,50 @@ void esp_recv_entrance(void *arg, char *pdata, uint16_t len)
     if(!ROOT){
         if(flag==0){
             flag=1;
-            pwm_set(0);
+            int i = 0;
+            bool kamu = false;
+            char tst_data[104];  
+            char Keterangan[20];
+            char Data[100];
+            for (i = 0; i < 104; i++){tst_data[i] = '\0';}
+            for (i = 0; i < 20; i++){Keterangan[i] = '\0';}
+            for (i = 0; i < 100; i++){Data[i] = '\0';}
+            for (i = 0; i < len; i++)
+            {
+                if (usr_data[i] == '{' && usr_data[i+1] == '"')
+                {
+                    kamu =  true;
+                }
+                if (kamu)
+                {
+                    os_sprintf (tst_data, "%s%c",tst_data, usr_data[i]);
+                }
+            }
+            uint8 Mark[4] = {0,0,0,0};
+            uint8 count = 0;
+            for ( i = 0; i < strlen(tst_data); i++)
+            {
+                if (tst_data[i] == '"')
+                {
+                    Mark[count] = i;
+                    count++;
+                }
+
+            }
+            count = 0;
+            for (i = Mark[0]; i < Mark[1]-1; i++)
+            {
+                Keterangan[count++] = tst_data[i+1];
+            }
+            count = 0;
+            for (i = Mark[2]; i < Mark[3]-1; i++)
+            {
+                Data[count++] = tst_data[i+1];
+            }
+            artificial_proccess(Keterangan,Data);
+            MESH_PRINT("Paket:%s",tst_data);
+            MESH_PRINT("Keterangan:%s\n",Keterangan);
+            MESH_PRINT("Data:%s\n\n",Data);
             mesh_bcast(usr_data);
         }
     }
@@ -123,7 +197,14 @@ void esp_recv_entrance(void *arg, char *pdata, uint16_t len)
 #endif
 }
 
-void mesh_bcast(char buf[])
+void ICACHE_FLASH_ATTR artificial_proccess(char* _Keterangan,char* _Data)
+{
+
+    if (_Keterangan[0] == 'C' && _Keterangan[1] == 'D')pwm_set(atoi(_Data));
+   
+}
+
+void ICACHE_FLASH_ATTR mesh_bcast(char buf[])
 {
     uint8_t src[6];
     uint8_t dst[6];
@@ -170,7 +251,7 @@ void mesh_bcast(char buf[])
     MESH_FREE(header);
 }
 
-void esp_mesh_con_cb(void *arg)
+void ICACHE_FLASH_ATTR esp_mesh_con_cb(void *arg)
 {
     static os_timer_t tst_timer;
     struct espconn *server = (struct espconn *)arg;
@@ -183,7 +264,7 @@ void esp_mesh_con_cb(void *arg)
     }
     
     timer_init();
-    pwm_init();
+    pwm_initialize();
     if(ROOT){
         sensor_init();
     } 
@@ -192,7 +273,7 @@ void esp_mesh_con_cb(void *arg)
     os_timer_setfn(&tst_timer, (os_timer_func_t *)esp_mesh, NULL);
     os_timer_arm(&tst_timer, 5000, true);
 }
-void timer_init()
+void ICACHE_FLASH_ATTR timer_init()
 {
     static os_timer_t timer_timer;
     os_timer_disarm(&timer_timer);
@@ -200,7 +281,7 @@ void timer_init()
     os_timer_arm(&timer_timer, 1000, true);
 }
 
-void timer_cb()
+void ICACHE_FLASH_ATTR timer_cb()
 {
     if(flag==1){
         cnt++;
@@ -211,42 +292,111 @@ void timer_cb()
     }
 }
 
-void sensor_init()
+void ICACHE_FLASH_ATTR sensor_init()
 {
+    sensor.pin = 5;
+	sensor.type = DHT11;
+ 	MESH_DEMO_PRINT("DHT22 init on GPIO%d\r\n", pin_num[sensor.pin]);
+	DHTInit(&sensor);
+    if (BH1750Init()) {
+    	MESH_DEMO_PRINT("BH1750 init done.\r\n");
+    }
+    else {
+        MESH_DEMO_PRINT("BH1750 init error.\r\n");
+        return;
+    }
     static os_timer_t sensor_timer;
     os_timer_disarm(&sensor_timer);
     os_timer_setfn(&sensor_timer, (os_timer_func_t *)sensor_cb, NULL);
     os_timer_arm(&sensor_timer, 10000, true);
 }
 
-void sensor_cb(){
+void ICACHE_FLASH_ATTR sensor_cb(){
     //baca
-    MESH_PRINT("BACA SENSOR \r\n");
-    char buf[32] = "";
-    
-    os_memset(buf, 0, sizeof(buf));
-
-    os_sprintf(buf, "%s", "{\"bcast\":\"");
-    os_sprintf(buf + os_strlen(buf), "%s", "root");
-    os_sprintf(buf + os_strlen(buf), "%s", "\"}\r\n");
-    
-    pwm_set(0);
-    //kirim
-    mesh_bcast(buf);
+    MESH_PRINT("BACA SENSOR \r\n"); 
+    // baca dht
+	static uint8_t i;
+	DHT_Sensor_Data data;
+	uint8_t pin;
+	pin = pin_num[sensor.pin];
+	if (DHTRead(&sensor, &data))
+	{
+	    char d1[20];DHTFloat2String(d1, data.temperature);
+	    char d2[20];DHTFloat2String(d2, data.humidity);
+	    char Send_Paket[64];
+	    os_sprintf (Send_Paket, "{\"TM\":\"%s\"}",d1);
+	    MESH_DEMO_PRINT("Temperature: %s *C\r\n", d1);
+	    MESH_DEMO_PRINT("Humidity: %s %%\r\n", d2);
+	} else {
+	    MESH_DEMO_PRINT("Failed to read temperature and humidity sensor on GPIO%d\n", pin);
+	}
+	int datalux;
+    char temp[80];
+    MESH_DEMO_PRINT("Get light...\r\n");
+    datalux = GetLight();
+    if(datalux == -1){
+    	MESH_DEMO_PRINT("Error get light value\r\n");
+        os_sprintf(temp,"{\"CD\":\"%d\"}", 96);
+		mesh_bcast(temp);
+    }
+    else
+    {
+        pwm_set(datalux);
+    	os_sprintf(temp,"{\"CD\":\"%d\"}", datalux);
+		mesh_bcast(temp);
+    }
 }
 
-void pwm_init()
+void ICACHE_FLASH_ATTR pwm_initialize()
 {
     //inisialisai PWM
     MESH_PRINT("PWM INIT DONE\r\n");
+	PIN_FUNC_SELECT(PERIPHS_IO_MUX_GPIO5_U,FUNC_GPIO5);
+	gpio_init();
+    pwm_init(1000, duty,1,io_info);
 }
 
-void pwm_set(int pwm)
+void ICACHE_FLASH_ATTR pwm_set(int value)
 {
     MESH_PRINT("PWM SET\r\n");
+    if (value>(setpoint - range) && value <(setpoint + range))
+	{
+		brigthness=lastbrigthness;
+	}
+	else if (value>(setpoint + range))
+	{
+	MESH_DEMO_PRINT("lux tinggi\r\n");
+		//brigthness= lastbrigthness + brigthnessincrement;
+		last_value = last_value - brigthnessdecrement;
+		if(last_value < 0){
+			last_value = 0;
+		}else if(last_value > 100){
+			last_value = 100;
+		}
+		pwm_set_duty(last_value * 222, 0);  
+		pwm_start();
+		//brigthness=lastbrigthness;
+	}
+	else if (value<(setpoint - range))
+	{
+	MESH_DEMO_PRINT("lux rendah\r\n");
+		//brigthness= lastbrigthness - brigthnessdecrement;
+		last_value = last_value + brigthnessincrement;
+		if(last_value < 0){
+			last_value = 0;
+		}else if(last_value > 100){
+			last_value = 100;
+		}
+		pwm_set_duty(last_value * 222, 0);  
+		pwm_start();
+	}
+	//os_sprintf ("{\"value\":\"%d\"}",brigthness);
+	MESH_DEMO_PRINT("brigthness:%d\r\n",last_value);
+	MESH_DEMO_PRINT("lux       :%d\r\n",value);
 }
 
-void mesh_enable_cb(int8_t res)
+
+void ICACHE_FLASH_ATTR mesh_enable_cb(int8_t res)
 {
 	MESH_PRINT("mesh_enable_cb\n");
     MESH_PRINT("I am ROOT\r\n");
@@ -297,7 +447,7 @@ void mesh_enable_cb(int8_t res)
     
 }
 
-void esp_mesh()
+void ICACHE_FLASH_ATTR esp_mesh()
 {
     char buf[32];
     uint8_t src[6];
@@ -364,7 +514,7 @@ void esp_mesh()
     MESH_FREE(header);
 }
 
-bool esp_mesh_init()
+bool ICACHE_FLASH_ATTR esp_mesh_init()
 {
     struct station_config config;
 
@@ -439,7 +589,7 @@ void user_pre_init(void){}
  * Parameters   : none
  * Returns      : none
 *******************************************************************************/
-void user_init(void)
+void ICACHE_FLASH_ATTR user_init(void)
 {
     if (!esp_mesh_init())
         return;

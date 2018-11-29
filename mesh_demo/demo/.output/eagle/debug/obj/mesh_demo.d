@@ -14,4 +14,6 @@
  /opt/xtensa-lx106-elf/lib/gcc/xtensa-lx106-elf/4.8.2/include/sys/_types.h \
  /opt/xtensa-lx106-elf/lib/gcc/xtensa-lx106-elf/4.8.2/include/sys/lock.h \
  /opt/xtensa-lx106-elf/lib/gcc/xtensa-lx106-elf/4.8.2/include/stddef.h \
- ../../include/espconn.h
+ ../../include/espconn.h ../../include/gpio.h ../../include/ets_sys.h \
+ ../include/i2c.h ../include/bh1750.h ../../include/os_type.h \
+ ../../include/user_interface.h ../include/dht22.h ../include/gpio16.h
