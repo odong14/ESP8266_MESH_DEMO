@@ -25,10 +25,20 @@
 static esp_tcp ser_tcp;
 static struct espconn ser_conn;
 
-void esp_mesh_test();
+void esp_mesh();
 void mesh_enable_cb(int8_t res);
 void esp_mesh_con_cb(void *);
 void esp_recv_entrance(void *, char *, uint16_t);
+void pwm_init();
+void pwm_set(int pwm);
+void sensor_init();
+void sensor_cb();
+void mesh_bcast(char buf[]);
+void timer_init();
+void timer_cb();
+
+int flag = 0;
+int cnt = 0;
 
 void esp_recv_entrance(void *arg, char *pdata, uint16_t len)
 {
@@ -50,6 +60,13 @@ void esp_recv_entrance(void *arg, char *pdata, uint16_t len)
         return;
 
     MESH_PRINT("user data, len:%d, content:%s\n", &usr_data_len, usr_data);
+    if(!ROOT){
+        if(flag==0){
+            flag=1;
+            pwm_set(0);
+            mesh_bcast(usr_data);
+        }
+    }
     /* 
      * process packet
      * call packet_parser(...)
@@ -106,10 +123,8 @@ void esp_recv_entrance(void *arg, char *pdata, uint16_t len)
 #endif
 }
 
-void ICACHE_FLASH_ATTR
-mesh_json_bcast()
+void mesh_bcast(char buf[])
 {
-    char buf[32];
     uint8_t src[6];
     uint8_t dst[6];
     struct mesh_header_format *header = NULL;
@@ -118,12 +133,6 @@ mesh_json_bcast()
         MESH_PRINT("bcast get sta mac fail\n");
         return;
     }
-
-    os_memset(buf, 0, sizeof(buf));
-
-    os_sprintf(buf, "%s", "{\"bcast\":\"");
-    os_sprintf(buf + os_strlen(buf), MACSTR, MAC2STR(src));
-    os_sprintf(buf + os_strlen(buf), "%s", "\"}\r\n");
 
     os_memset(dst, 0, sizeof(dst));  // use bcast to get all the devices working in mesh from root.
     header = (struct mesh_header_format *)espconn_mesh_create_packet(
@@ -161,15 +170,6 @@ mesh_json_bcast()
     MESH_FREE(header);
 }
 
-void ICACHE_FLASH_ATTR
-mesh_json_bcast_init()
-{
-    static os_timer_t bcast_timer;
-    os_timer_disarm(&bcast_timer);
-    os_timer_setfn(&bcast_timer, (os_timer_func_t *)mesh_json_bcast, NULL);
-    os_timer_arm(&bcast_timer, 18000, true);
-}
-
 void esp_mesh_con_cb(void *arg)
 {
     static os_timer_t tst_timer;
@@ -181,15 +181,75 @@ void esp_mesh_con_cb(void *arg)
         MESH_PRINT("con_cb, para err\n");
         return;
     }
+    
+    timer_init();
+    pwm_init();
+    if(ROOT){
+        sensor_init();
+    } 
 
     os_timer_disarm(&tst_timer);
-    os_timer_setfn(&tst_timer, (os_timer_func_t *)esp_mesh_test, NULL);
+    os_timer_setfn(&tst_timer, (os_timer_func_t *)esp_mesh, NULL);
     os_timer_arm(&tst_timer, 5000, true);
+}
+void timer_init()
+{
+    static os_timer_t timer_timer;
+    os_timer_disarm(&timer_timer);
+    os_timer_setfn(&timer_timer, (os_timer_func_t *)timer_cb, NULL);
+    os_timer_arm(&timer_timer, 1000, true);
+}
+
+void timer_cb()
+{
+    if(flag==1){
+        cnt++;
+        if(cnt>5){
+            cnt=0;
+            flag=0;
+        }
+    }
+}
+
+void sensor_init()
+{
+    static os_timer_t sensor_timer;
+    os_timer_disarm(&sensor_timer);
+    os_timer_setfn(&sensor_timer, (os_timer_func_t *)sensor_cb, NULL);
+    os_timer_arm(&sensor_timer, 10000, true);
+}
+
+void sensor_cb(){
+    //baca
+    MESH_PRINT("BACA SENSOR \r\n");
+    char buf[32] = "";
+    
+    os_memset(buf, 0, sizeof(buf));
+
+    os_sprintf(buf, "%s", "{\"bcast\":\"");
+    os_sprintf(buf + os_strlen(buf), "%s", "root");
+    os_sprintf(buf + os_strlen(buf), "%s", "\"}\r\n");
+    
+    pwm_set(0);
+    //kirim
+    mesh_bcast(buf);
+}
+
+void pwm_init()
+{
+    //inisialisai PWM
+    MESH_PRINT("PWM INIT DONE\r\n");
+}
+
+void pwm_set(int pwm)
+{
+    MESH_PRINT("PWM SET\r\n");
 }
 
 void mesh_enable_cb(int8_t res)
 {
 	MESH_PRINT("mesh_enable_cb\n");
+    MESH_PRINT("I am ROOT\r\n");
 
     if (res == MESH_OP_FAILURE) {
 	    MESH_PRINT("enable mesh fail\n");
@@ -235,10 +295,9 @@ void mesh_enable_cb(int8_t res)
         return;
     }
     
-    mesh_json_bcast_init();
 }
 
-void esp_mesh_test()
+void esp_mesh()
 {
     char buf[32];
     uint8_t src[6];
@@ -386,7 +445,7 @@ void user_init(void)
         return;
 
     user_devicefind_init();
-
+    
     /*
      * enable mesh
      * after enable mesh, you should wait for the mesh_enable_cb to be triggered.

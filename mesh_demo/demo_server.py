@@ -12,7 +12,7 @@ def echo(socket, address):
             if not _buf:
                 return
 	    _buf = _buf[0:4] + _buf[10:16] + _buf[4:10] + _buf[16:]
-            socket.sendall(_buf)
+            #socket.sendall(_buf)
             print _buf
     except Exception, e:
         print traceback.format_exc()
